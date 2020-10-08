@@ -4,8 +4,8 @@
 Generate landscapes using Perlin noise in Julia.
 
 - **All credit goes to [Cormullion](https://github.com/cormullion)**
-- [Original source](https://github.com/cormullion/cormullion.github.io/blob/dev/source/noise.jl)
-- [Blog post](https://cormullion.github.io/pages/2018-10-11-noise/)
+    - [Original source](https://github.com/cormullion/cormullion.github.io/blob/dev/source/noise.jl)
+    - [Blog post](https://cormullion.github.io/pages/2018-10-11-noise/)
 
 ## Installation
 ```julia
