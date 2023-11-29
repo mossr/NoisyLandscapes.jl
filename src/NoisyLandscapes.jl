@@ -4,12 +4,19 @@ using Luxor
 using Colors
 using ColorSchemes
 
-export landscape, ColorSchemes
+export landscape, ColorSchemes, ColorSettings
 
 # The final images in this post combine 2D noise and 1D noise; 2D noise for the sky, and 1D noise to create the contours.
 
 # There's a `initnoise()` function. This is broadly the equivalent of the `Random.seed!()` function in Julia.
 # This is useful when you want the noise to vary from image to image.
+
+struct ColorSettings
+    sun
+    sky
+    clouds::Bool
+    mountains::Vector
+end
 
 function layer(leftminheight, rightminheight, noiserate;
         detail=1, persistence=0)
@@ -27,13 +34,13 @@ function layer(leftminheight, rightminheight, noiserate;
     poly(p, :fill, close=true)
 end
 
-function clouds()
+function clouds(width=800)
     tiles = Tiler(boxwidth(BoundingBox()),
                   boxheight(BoundingBox()),
-                  800, 800, margin=0)
+                  width, width, margin=0)
     @layer begin
         transform([3 0 0 1 0 0])
-        setopacity(0.3)
+        setopacity(0.1)
         noiserate = 0.03
         for (pos, n) in tiles
             nv = noise(pos.x * noiserate,
@@ -58,36 +65,63 @@ function colorblend(fromcolor, tocolor, n=0.5)
     return RGBA(new_red, new_green, new_blue, new_alpha)
 end
 
-function landscape(scheme, filename)
-    d = Drawing(800, 300, "$filename.png")
+function landscape(scheme::Union{Any,ColorSettings}, filename; size=(800,300), fixed_sunposition=nothing)
+    d = Drawing(size..., "$filename.png")
     origin()
     ## sky is gradient mesh
     bb = BoundingBox()
-    mesh1 = mesh(box(bb, vertices=true), [
-        get(scheme, rand()),
-        get(scheme, rand()),
-        get(scheme, rand()),
-        get(scheme, rand())])
+    is_fixed_colors = isa(scheme, ColorSettings)
+    local sky_color
+    if is_fixed_colors
+        sky_color = [scheme.sky]
+    else
+        sky_color = [
+            get(scheme, rand()),
+            get(scheme, rand()),
+            get(scheme, rand()),
+            get(scheme, rand())]
+    end
+    mesh1 = mesh(box(bb, vertices=true), sky_color)
     setmesh(mesh1)
     box(bb, :fill)
     ## clouds are 2D noise
-    clouds()
+    show_clouds = is_fixed_colors ? scheme.clouds : true
+    if show_clouds
+        clouds(size[1])
+    end
+    sun_color = is_fixed_colors ? scheme.sun : get(scheme, .95)
     ## the sun is a disk placed at random
     @layer begin
         setopacity(0.25)
-        sethue(get(scheme, .95))
-        sunposition = boxtop(bb) + (rand(-boxwidth(bb)/3:boxwidth(bb)/3), boxheight(bb)/10)
+        sethue(sun_color)
+        if !isnothing(fixed_sunposition)
+            rand() # keep RNG the same
+            sunposition = fixed_sunposition
+        else
+            sunposition = boxtop(bb) + (rand(-boxwidth(bb)/3:boxwidth(bb)/3), boxheight(bb)/10)
+        end
         circle(sunposition, boxdiagonal(bb)/30, :fill)
     end
     setopacity(0.8)
     ## how many layers
     len = 6
-    noiselevels = range(100, length=len, stop=10)
-    detaillevels = 1:len
-    persistencelevels = range(0.5, length=len, stop=0.95 )
+    default = true
+    if default
+        noiselevels = range(100, length=len, stop=10)
+        detaillevels = 1:len
+        persistencelevels = range(0.5, length=len, stop=0.95)
+    else
+        noiselevels = range(100, length=len, stop=80)
+        detaillevels = div(len,2) .* ones(Int, len) # 1:len
+        persistencelevels = range(0.5, length=len, stop=0.95)
+    end
     for (n, i) in enumerate(range(1, length=len, stop=0))
-        ## avoid extremes of range
-        sethue(colorblend(get(scheme, .05), get(scheme, .95), i))
+        if is_fixed_colors
+            sethue(scheme.mountains[n])
+        else
+            ## avoid extremes of range
+            sethue(colorblend(get(scheme, .05), get(scheme, .95), i))
+        end
         layer(i - rand()/2, i - rand()/2,
               noiselevels[n], detail=detaillevels[n],
               persistence=persistencelevels[n])
